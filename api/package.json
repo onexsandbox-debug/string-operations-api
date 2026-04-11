@@ -1,0 +1,9 @@
+{
+  "name": "string-operations-api",
+  "version": "1.0.0",
+  "description": "String operations API for Vercel",
+  "main": "index.js",
+  "scripts": {
+    "start": "vercel dev"
+  }
+}
