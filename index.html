@@ -397,13 +397,13 @@ if (!localStorage.getItem("user")) {
     <div class="page-size-selector">
       <label>Show</label>
       <select id="pageSize" onchange="changePageSize()">
-  <option value="10">10</option>
-  <option value="15" selected>15</option>
+  <option value="10" selected>10</option>
   <option value="25">25</option>
   <option value="50">50</option>
   <option value="100">100</option>
   <option value="all">All</option>
 </select>
+
       <label>entries</label>
     </div>
 
@@ -484,7 +484,7 @@ let currentMilestone = 'mile1';
 
 // ✅ Pagination state
 let currentPage = 1;
-let pageSize = 15;
+let pageSize = 10;
 
 let analyticsData = {
   mile1: [], mile2: [], mile3: [], mile4: [], final: []
