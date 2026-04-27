@@ -115,6 +115,24 @@
       color: white;
     }
 
+    .btn-refresh-analytics {
+      background: #2e7d32;
+      color: white;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-refresh-analytics:hover {
+      background: #1b5e20;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -154,6 +172,28 @@
     }
 
     /* ✅ Analytics Dashboard Styles */
+    .analytics-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      background: white;
+      padding: 12px 15px;
+      border-radius: 10px;
+    }
+
+    .analytics-toolbar h4 {
+      margin: 0;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .last-updated {
+      font-size: 11px;
+      color: #888;
+      margin-right: 10px;
+    }
+
     .analytics-card {
       background: white;
       padding: 20px;
@@ -180,6 +220,12 @@
       border-radius: 10px;
       text-align: center;
       box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      transition: transform 0.2s;
+    }
+
+    .stat-box:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
 
     .stat-box .label {
@@ -192,6 +238,16 @@
       font-size: 22px;
       font-weight: 700;
       color: #1f4e8c;
+    }
+
+    /* Spin animation for refresh icon */
+    .spinning {
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
   </style>
 </head>
@@ -215,7 +271,6 @@ if (!localStorage.getItem("user")) {
     <div onclick="switchMilestone('mile3', this)">Milestone 3: KYC Completed</div>
     <div onclick="switchMilestone('mile4', this)">Milestone 4: Personal Details</div>
     <div onclick="switchMilestone('final', this)">Final Account Details</div>
-    <!-- ✅ NEW Analytics Menu Item -->
     <div onclick="switchMilestone('analytics', this)">📊 Analytics Dashboard</div>
   </div>
 </div>
@@ -243,6 +298,17 @@ if (!localStorage.getItem("user")) {
 
   <!-- ✅ ANALYTICS DASHBOARD SECTION -->
   <div id="analyticsSection" style="display:none;">
+
+    <!-- Toolbar with Refresh Button -->
+    <div class="analytics-toolbar">
+      <h4>📊 Analytics Dashboard</h4>
+      <div style="display:flex; align-items:center;">
+        <span class="last-updated" id="lastUpdated">Last updated: —</span>
+        <button class="btn-refresh-analytics" onclick="refreshAnalytics()">
+          <span id="refreshIcon">🔄</span> Refresh Analytics
+        </button>
+      </div>
+    </div>
 
     <!-- Quick Stats Boxes -->
     <div class="stats-grid">
@@ -339,6 +405,15 @@ function refreshData() {
   else if (currentMilestone === 'mile4') loadMile4();
   else if (currentMilestone === 'final') loadFinalReport();
   else if (currentMilestone === 'analytics') loadAnalytics();
+}
+
+// ✅ Refresh just analytics with spinning icon feedback
+function refreshAnalytics() {
+  const icon = document.getElementById("refreshIcon");
+  icon.classList.add("spinning");
+  loadAnalytics(() => {
+    icon.classList.remove("spinning");
+  });
 }
 
 function loadMile1() {
@@ -617,10 +692,40 @@ function renderFinalReport(data) {
 }
 
 // ✅ ============ ANALYTICS DASHBOARD ============
-function loadAnalytics() {
-  document.getElementById("tableHead").innerHTML = "";
-  document.getElementById("tableBody").innerHTML = "";
 
+// 🎯 Robust milestone-completion detectors
+function isOtpVerified(d) {
+  const val = (d.otp_status || d.otp_validation || "").toString().trim().toLowerCase();
+  return val === "otp verified" || val === "verified" || val === "true" || val === "1" || d.otp_status === true;
+}
+
+function isPanVerified(d) {
+  const val = (d.pan_status || "").toString().trim().toLowerCase();
+  return val === "verified" || val === "pan verified" || val === "true" || d.pan_status === true;
+}
+
+function isKycVerified(d) {
+  // Direct status field check
+  const statusVal = (d.kyc_status || d.status || "").toString().trim().toLowerCase();
+  const statusOk = statusVal === "verified" || statusVal === "completed" || statusVal === "kyc verified";
+
+  // Fallback: infer from KYC data presence (Aadhaar, DOB, or full address)
+  const hasKycData = !!(d.masked_aadhaar || d.aadhaar || d.dob || d.full_address);
+
+  return statusOk || hasKycData;
+}
+
+function isPersonalDone(d) {
+  const consentVal = (d.consent || "").toString().trim().toLowerCase();
+  const consentOk = consentVal === "yes" || consentVal === "true" || d.consent === true;
+
+  // Fallback: presence of personal-details fields
+  const hasPersonalData = !!(d.income && (d.occupation || d.marital_status));
+
+  return consentOk || hasPersonalData;
+}
+
+function loadAnalytics(callback) {
   fetch('/api/getAllData?type=final')
     .then(res => res.json())
     .then(result => {
@@ -632,19 +737,27 @@ function loadAnalytics() {
       renderTrend(data);
       renderConversion(data);
       renderDaily(data);
+
+      // Update last-updated timestamp
+      const now = new Date();
+      const timeStr = now.toLocaleString();
+      document.getElementById("lastUpdated").textContent = "Last updated: " + timeStr;
+
+      if (typeof callback === "function") callback();
     })
     .catch(err => {
       console.error("Analytics load error:", err);
       alert("Failed to load analytics data");
+      if (typeof callback === "function") callback();
     });
 }
 
-// ✅ Quick Stats
+// ✅ Quick Stats (TOP BAR)
 function updateStats(data) {
-  const otp = data.filter(d => d.otp_status === "OTP Verified").length;
-  const pan = data.filter(d => d.pan_status === "Verified").length;
-  const kyc = data.filter(d => d.status === "Verified").length;
-  const personal = data.filter(d => d.consent === true || d.consent === "Yes").length;
+  const otp = data.filter(isOtpVerified).length;
+  const pan = data.filter(isPanVerified).length;
+  const kyc = data.filter(isKycVerified).length;
+  const personal = data.filter(isPersonalDone).length;
 
   document.getElementById("statOtp").textContent = otp;
   document.getElementById("statPan").textContent = pan;
@@ -656,10 +769,10 @@ function updateStats(data) {
 // 🔻 FUNNEL CHART
 function renderFunnel(data) {
   const counts = {
-    otp: data.filter(d => d.otp_status === "OTP Verified").length,
-    pan: data.filter(d => d.pan_status === "Verified").length,
-    kyc: data.filter(d => d.status === "Verified").length,
-    personal: data.filter(d => d.consent === true || d.consent === "Yes").length,
+    otp: data.filter(isOtpVerified).length,
+    pan: data.filter(isPanVerified).length,
+    kyc: data.filter(isKycVerified).length,
+    personal: data.filter(isPersonalDone).length,
     final: data.length
   };
 
@@ -672,13 +785,7 @@ function renderFunnel(data) {
       datasets: [{
         label: 'Users',
         data: [counts.otp, counts.pan, counts.kyc, counts.personal, counts.final],
-        backgroundColor: [
-          '#ff7a00',
-          '#1f4e8c',
-          '#2e7d32',
-          '#9c27b0',
-          '#e60023'
-        ],
+        backgroundColor: ['#ff7a00', '#1f4e8c', '#2e7d32', '#9c27b0', '#e60023'],
         borderRadius: 6
       }]
     },
@@ -707,9 +814,9 @@ function renderTrend(data) {
       grouped[date] = { otp: 0, pan: 0, kyc: 0, final: 0 };
     }
 
-    if (item.otp_status === "OTP Verified") grouped[date].otp++;
-    if (item.pan_status === "Verified") grouped[date].pan++;
-    if (item.status === "Verified") grouped[date].kyc++;
+    if (isOtpVerified(item)) grouped[date].otp++;
+    if (isPanVerified(item)) grouped[date].pan++;
+    if (isKycVerified(item)) grouped[date].kyc++;
     grouped[date].final++;
   });
 
@@ -766,10 +873,10 @@ function renderTrend(data) {
 
 // 📊 CONVERSION CHART
 function renderConversion(data) {
-  const otp = data.filter(d => d.otp_status === "OTP Verified").length;
-  const pan = data.filter(d => d.pan_status === "Verified").length;
-  const kyc = data.filter(d => d.status === "Verified").length;
-  const personal = data.filter(d => d.consent === true || d.consent === "Yes").length;
+  const otp = data.filter(isOtpVerified).length;
+  const pan = data.filter(isPanVerified).length;
+  const kyc = data.filter(isKycVerified).length;
+  const personal = data.filter(isPersonalDone).length;
 
   const otpToPan = otp ? (pan / otp * 100) : 0;
   const panToKyc = pan ? (kyc / pan * 100) : 0;
@@ -795,7 +902,12 @@ function renderConversion(data) {
     options: {
       responsive: true,
       plugins: {
-        legend: { display: false }
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.parsed.y + '%'
+          }
+        }
       },
       scales: {
         y: {
