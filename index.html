@@ -22,6 +22,9 @@
       background: white;
       height: 100vh;
       border-right: 1px solid #eee;
+      position: sticky;
+      top: 0;
+      flex-shrink: 0;
     }
 
     .logo {
@@ -57,6 +60,8 @@
     .main {
       flex: 1;
       padding: 20px;
+      min-width: 0;            /* ✅ allows main to shrink properly */
+      overflow-x: auto;        /* ✅ horizontal scroll for wide tables */
     }
 
     .header {
@@ -64,10 +69,16 @@
       justify-content: space-between;
       align-items: center;
       margin-bottom: 20px;
+      position: sticky;        /* ✅ Logout button stays visible */
+      top: 0;
+      background: #f4f6f9;
+      padding: 10px 0;
+      z-index: 10;
     }
 
     .header h3 {
       font-size: 16px;
+      margin: 0;
     }
 
     .logout-btn {
@@ -78,6 +89,7 @@
       border-radius: 6px;
       cursor: pointer;
       font-size: 12px;
+      flex-shrink: 0;          /* ✅ never shrinks/disappears */
     }
 
     .filters {
@@ -88,13 +100,20 @@
       background: white;
       padding: 15px;
       border-radius: 10px;
+      align-items: center;
     }
 
-    .filters input {
+    .filters input,
+    .filters select {
       padding: 8px;
       border-radius: 6px;
       border: 1px solid #ccc;
       font-size: 12px;
+    }
+
+    .filters label {
+      font-size: 12px;
+      color: #555;
     }
 
     .btn {
@@ -133,6 +152,12 @@
       background: #1b5e20;
     }
 
+    .table-wrapper {
+      overflow-x: auto;
+      background: white;
+      border-radius: 10px;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -147,6 +172,7 @@
       padding: 12px;
       text-align: left;
       font-size: 12px;
+      white-space: nowrap;
     }
 
     td {
@@ -169,6 +195,74 @@
       padding: 4px 8px;
       border-radius: 10px;
       font-size: 11px;
+    }
+
+    /* ✅ Pagination Styles */
+    .pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 15px;
+      padding: 12px 15px;
+      background: white;
+      border-radius: 10px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .pagination-info {
+      font-size: 12px;
+      color: #555;
+    }
+
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .page-btn {
+      padding: 6px 12px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      min-width: 34px;
+      transition: all 0.2s;
+    }
+
+    .page-btn:hover:not(:disabled) {
+      background: #f5f5f5;
+      border-color: #1f4e8c;
+    }
+
+    .page-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .page-btn.active {
+      background: #1f4e8c;
+      color: white;
+      border-color: #1f4e8c;
+      font-weight: 600;
+    }
+
+    .page-size-selector {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #555;
+    }
+
+    .page-size-selector select {
+      padding: 5px 8px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 12px;
+      cursor: pointer;
     }
 
     /* ✅ Analytics Dashboard Styles */
@@ -248,13 +342,6 @@
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
-
-    .loading-overlay {
-      text-align: center;
-      padding: 40px;
-      color: #888;
-      font-size: 13px;
-    }
   </style>
 </head>
 
@@ -277,7 +364,7 @@ if (!localStorage.getItem("user")) {
     <div onclick="switchMilestone('mile3', this)">Milestone 3: KYC Completed</div>
     <div onclick="switchMilestone('mile4', this)">Milestone 4: Personal Details</div>
     <div onclick="switchMilestone('final', this)">Final Account Details</div>
-    <div onclick="switchMilestone('analytics', this)">Analytics Dashboard</div>
+    <div onclick="switchMilestone('analytics', this)">📊 Analytics Dashboard</div>
   </div>
 </div>
 
@@ -297,17 +384,40 @@ if (!localStorage.getItem("user")) {
     <button class="btn btn-download" onclick="refreshData()">Refresh</button>
   </div>
 
-  <table id="reportTable">
-    <thead id="tableHead"></thead>
-    <tbody id="tableBody"></tbody>
-  </table>
+  <!-- ✅ Table wrapped for horizontal scroll -->
+  <div class="table-wrapper" id="tableWrapper">
+    <table id="reportTable">
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- ✅ Pagination Controls -->
+  <div class="pagination" id="paginationSection">
+    <div class="page-size-selector">
+      <label>Show</label>
+      <select id="pageSize" onchange="changePageSize()">
+        <option value="10">10</option>
+        <option value="25" selected>25</option>
+        <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="all">All</option>
+      </select>
+      <label>entries</label>
+    </div>
+
+    <div class="pagination-info" id="paginationInfo">
+      Showing 0 - 0 of 0 entries
+    </div>
+
+    <div class="pagination-controls" id="paginationControls"></div>
+  </div>
 
   <!-- ✅ ANALYTICS DASHBOARD SECTION -->
   <div id="analyticsSection" style="display:none;">
 
-    <!-- Toolbar with Refresh Button -->
     <div class="analytics-toolbar">
-      <h4>Analytics Dashboard</h4>
+      <h4>📊 Analytics Dashboard</h4>
       <div style="display:flex; align-items:center;">
         <span class="last-updated" id="lastUpdated">Last updated: —</span>
         <button class="btn-refresh-analytics" onclick="refreshAnalytics()">
@@ -316,7 +426,6 @@ if (!localStorage.getItem("user")) {
       </div>
     </div>
 
-    <!-- Quick Stats Boxes -->
     <div class="stats-grid">
       <div class="stat-box">
         <div class="label">OTP Verified</div>
@@ -340,7 +449,6 @@ if (!localStorage.getItem("user")) {
       </div>
     </div>
 
-    <!-- Row 1: Funnel + Trend -->
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
       <div class="analytics-card">
         <h4>📊 Conversion Funnel</h4>
@@ -352,7 +460,6 @@ if (!localStorage.getItem("user")) {
       </div>
     </div>
 
-    <!-- Row 2: Conversion + Daily -->
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-top:20px;">
       <div class="analytics-card">
         <h4>🔄 Conversion Rates (%)</h4>
@@ -370,19 +477,18 @@ if (!localStorage.getItem("user")) {
 
 <script>
 
-let fullData = [];
+let fullData = [];           // raw data from API
+let filteredData = [];       // after filter applied (this is paginated)
 let currentMilestone = 'mile1';
 
-// ✅ Holds counts from all 5 milestones
+// ✅ Pagination state
+let currentPage = 1;
+let pageSize = 25;
+
 let analyticsData = {
-  mile1: [],
-  mile2: [],
-  mile3: [],
-  mile4: [],
-  final: []
+  mile1: [], mile2: [], mile3: [], mile4: [], final: []
 };
 
-// ✅ Chart instances (so we can destroy & re-render on refresh)
 let funnelChartInstance = null;
 let trendChartInstance = null;
 let conversionChartInstance = null;
@@ -395,14 +501,16 @@ function logout() {
 
 function switchMilestone(type, el) {
   currentMilestone = type;
+  currentPage = 1;            // reset page when switching
 
   document.querySelectorAll('.menu div').forEach(d => d.classList.remove('active'));
   el.classList.add('active');
 
   const isAnalytics = (type === 'analytics');
   document.getElementById("analyticsSection").style.display = isAnalytics ? 'block' : 'none';
-  document.getElementById("reportTable").style.display = isAnalytics ? 'none' : 'table';
+  document.getElementById("tableWrapper").style.display = isAnalytics ? 'none' : 'block';
   document.getElementById("filtersSection").style.display = isAnalytics ? 'none' : 'flex';
+  document.getElementById("paginationSection").style.display = isAnalytics ? 'none' : 'flex';
 
   if (type === 'mile1') loadMile1();
   else if (type === 'mile2') loadMile2();
@@ -424,10 +532,102 @@ function refreshData() {
 function refreshAnalytics() {
   const icon = document.getElementById("refreshIcon");
   icon.classList.add("spinning");
-  loadAnalytics(() => {
-    icon.classList.remove("spinning");
-  });
+  loadAnalytics(() => icon.classList.remove("spinning"));
 }
+
+// ✅ ============ PAGINATION HELPERS ============
+
+function changePageSize() {
+  const val = document.getElementById("pageSize").value;
+  pageSize = (val === "all") ? Infinity : parseInt(val);
+  currentPage = 1;
+  renderCurrentMilestone();
+}
+
+function getPaginatedData() {
+  if (pageSize === Infinity) return filteredData;
+  const start = (currentPage - 1) * pageSize;
+  const end = start + pageSize;
+  return filteredData.slice(start, end);
+}
+
+function getTotalPages() {
+  if (pageSize === Infinity) return 1;
+  return Math.max(1, Math.ceil(filteredData.length / pageSize));
+}
+
+function goToPage(page) {
+  const totalPages = getTotalPages();
+  if (page < 1 || page > totalPages) return;
+  currentPage = page;
+  renderCurrentMilestone();
+}
+
+function renderPagination() {
+  const total = filteredData.length;
+  const totalPages = getTotalPages();
+
+  // Make sure currentPage is valid
+  if (currentPage > totalPages) currentPage = totalPages;
+  if (currentPage < 1) currentPage = 1;
+
+  // Info text
+  const start = total === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const end = pageSize === Infinity ? total : Math.min(currentPage * pageSize, total);
+  document.getElementById("paginationInfo").textContent =
+    `Showing ${start} - ${end} of ${total} entries`;
+
+  // Controls
+  const controls = document.getElementById("paginationControls");
+  controls.innerHTML = "";
+
+  if (totalPages <= 1) return;
+
+  // First & Prev
+  controls.innerHTML += `
+    <button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(1)">«</button>
+    <button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">‹</button>
+  `;
+
+  // Page numbers (max 5 visible around current)
+  let startPage = Math.max(1, currentPage - 2);
+  let endPage = Math.min(totalPages, startPage + 4);
+  if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+
+  if (startPage > 1) {
+    controls.innerHTML += `<button class="page-btn" onclick="goToPage(1)">1</button>`;
+    if (startPage > 2) controls.innerHTML += `<span style="padding:0 4px;">…</span>`;
+  }
+
+  for (let p = startPage; p <= endPage; p++) {
+    controls.innerHTML += `
+      <button class="page-btn ${p === currentPage ? 'active' : ''}" onclick="goToPage(${p})">${p}</button>
+    `;
+  }
+
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) controls.innerHTML += `<span style="padding:0 4px;">…</span>`;
+    controls.innerHTML += `<button class="page-btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+  }
+
+  // Next & Last
+  controls.innerHTML += `
+    <button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">›</button>
+    <button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${totalPages})">»</button>
+  `;
+}
+
+function renderCurrentMilestone() {
+  const pageData = getPaginatedData();
+  if (currentMilestone === 'mile1') renderMile1(pageData);
+  else if (currentMilestone === 'mile2') renderMile2(pageData);
+  else if (currentMilestone === 'mile3') renderMile3(pageData);
+  else if (currentMilestone === 'mile4') renderMile4(pageData);
+  else if (currentMilestone === 'final') renderFinalReport(pageData);
+  renderPagination();
+}
+
+// ✅ ============ MILESTONE LOADERS ============
 
 function loadMile1() {
   document.getElementById("tableHead").innerHTML = `
@@ -445,22 +645,25 @@ function loadMile1() {
     .then(res => res.json())
     .then(result => {
       fullData = result.data || [];
-      renderMile1(fullData);
+      filteredData = fullData;
+      currentPage = 1;
+      renderCurrentMilestone();
     });
 }
 
 function renderMile1(data) {
   const table = document.getElementById("tableBody");
   table.innerHTML = "";
+  const offset = (currentPage - 1) * (pageSize === Infinity ? 0 : pageSize);
 
   data.forEach((item, i) => {
     table.innerHTML += `
       <tr>
-        <td>${i+1}</td>
-        <td>${item.urn}</td>
-        <td>${item.mobile_number}</td>
-        <td>${item.date}</td>
-        <td>${item.time}</td>
+        <td>${offset + i + 1}</td>
+        <td>${item.urn || '-'}</td>
+        <td>${item.mobile_number || '-'}</td>
+        <td>${item.date || '-'}</td>
+        <td>${item.time || '-'}</td>
         <td>
           ${(item.otp_validation || item.otp_status) === "OTP Verified"
             ? '<span class="badge-success">Verified</span>'
@@ -491,19 +694,22 @@ function loadMile2() {
     .then(res => res.json())
     .then(result => {
       fullData = result.data || [];
-      renderMile2(fullData);
+      filteredData = fullData;
+      currentPage = 1;
+      renderCurrentMilestone();
     });
 }
 
 function renderMile2(data) {
   const table = document.getElementById("tableBody");
   table.innerHTML = "";
+  const offset = (currentPage - 1) * (pageSize === Infinity ? 0 : pageSize);
 
   data.forEach((item, i) => {
     table.innerHTML += `
       <tr>
-        <td>${i+1}</td>
-        <td>${item.urn}</td>
+        <td>${offset + i + 1}</td>
+        <td>${item.urn || '-'}</td>
         <td>${item.account_type || '-'}</td>
         <td>${item.full_name || '-'}</td>
         <td>${item.pan_number || '-'}</td>
@@ -513,9 +719,9 @@ function renderMile2(data) {
             : '<span class="badge-pending">Pending</span>'}
         </td>
         <td>${item.father_name || '-'}</td>
-        <td>${item.mobile_number}</td>
-        <td>${item.date}</td>
-        <td>${item.time}</td>
+        <td>${item.mobile_number || '-'}</td>
+        <td>${item.date || '-'}</td>
+        <td>${item.time || '-'}</td>
       </tr>
     `;
   });
@@ -544,18 +750,21 @@ function loadMile3() {
     .then(res => res.json())
     .then(result => {
       fullData = result.data || [];
-      renderMile3(fullData);
+      filteredData = fullData;
+      currentPage = 1;
+      renderCurrentMilestone();
     });
 }
 
 function renderMile3(data) {
   const table = document.getElementById("tableBody");
   table.innerHTML = "";
+  const offset = (currentPage - 1) * (pageSize === Infinity ? 0 : pageSize);
 
   data.forEach((item, i) => {
     table.innerHTML += `
       <tr>
-        <td>${i+1}</td>
+        <td>${offset + i + 1}</td>
         <td>${item.urn || '-'}</td>
         <td>${item.mobile_number || '-'}</td>
         <td>${item.full_name || '-'}</td>
@@ -565,18 +774,14 @@ function renderMile3(data) {
         <td>${item.full_address || '-'}</td>
         <td>${item.zip || '-'}</td>
         <td>
-          <span class="badge-success">
-            ${item.status || 'Verified'}
-          </span>
+          <span class="badge-success">${item.status || 'Verified'}</span>
         </td>
         <td>${item.date || '-'}</td>
         <td>${item.time || '-'}</td>
         <td>
-          ${
-            item.profile_image
-              ? `<a href="${item.profile_image}" target="_blank">View</a>`
-              : '-'
-          }
+          ${item.profile_image
+            ? `<a href="${item.profile_image}" target="_blank">View</a>`
+            : '-'}
         </td>
       </tr>
     `;
@@ -584,8 +789,6 @@ function renderMile3(data) {
 }
 
 function loadMile4() {
-  currentMilestone = 'mile4';
-
   document.getElementById("tableHead").innerHTML = `
     <tr>
       <th>S.No</th>
@@ -606,18 +809,21 @@ function loadMile4() {
     .then(res => res.json())
     .then(result => {
       fullData = result.data || [];
-      renderMile4(fullData);
+      filteredData = fullData;
+      currentPage = 1;
+      renderCurrentMilestone();
     });
 }
 
 function renderMile4(data) {
   const table = document.getElementById("tableBody");
   table.innerHTML = "";
+  const offset = (currentPage - 1) * (pageSize === Infinity ? 0 : pageSize);
 
   data.forEach((item, i) => {
     table.innerHTML += `
       <tr>
-        <td>${i+1}</td>
+        <td>${offset + i + 1}</td>
         <td>${item.urn || '-'}</td>
         <td>${item.mobile_number || '-'}</td>
         <td>${item.income || '-'}</td>
@@ -664,18 +870,21 @@ function loadFinalReport() {
     .then(res => res.json())
     .then(result => {
       fullData = result.data || [];
-      renderFinalReport(fullData);
+      filteredData = fullData;
+      currentPage = 1;
+      renderCurrentMilestone();
     });
 }
 
 function renderFinalReport(data) {
   const table = document.getElementById("tableBody");
   table.innerHTML = "";
+  const offset = (currentPage - 1) * (pageSize === Infinity ? 0 : pageSize);
 
   data.forEach((item, i) => {
     table.innerHTML += `
       <tr>
-        <td>${i+1}</td>
+        <td>${offset + i + 1}</td>
         <td>${item.urn || '-'}</td>
         <td>${item.mobile_number || '-'}</td>
         <td>${item.otp_status || '-'}</td>
@@ -701,11 +910,9 @@ function renderFinalReport(data) {
   });
 }
 
-// ✅ ============ ANALYTICS DASHBOARD (FIXED) ============
-// 🎯 Now fetches ALL milestones in parallel and uses their actual record counts!
+// ✅ ============ ANALYTICS DASHBOARD ============
 
 function loadAnalytics(callback) {
-  // Fetch all 5 endpoints in parallel
   Promise.all([
     fetch('/api/getAllData?type=mile1').then(r => r.json()).catch(() => ({ data: [] })),
     fetch('/api/getAllData?type=mile2').then(r => r.json()).catch(() => ({ data: [] })),
@@ -726,9 +933,7 @@ function loadAnalytics(callback) {
     renderConversion();
     renderDaily();
 
-    const now = new Date();
-    document.getElementById("lastUpdated").textContent = "Last updated: " + now.toLocaleString();
-
+    document.getElementById("lastUpdated").textContent = "Last updated: " + new Date().toLocaleString();
     if (typeof callback === "function") callback();
   })
   .catch(err => {
@@ -738,7 +943,6 @@ function loadAnalytics(callback) {
   });
 }
 
-// ✅ Quick Stats — uses RECORD COUNT from each milestone endpoint
 function updateStats() {
   document.getElementById("statOtp").textContent = analyticsData.mile1.length;
   document.getElementById("statPan").textContent = analyticsData.mile2.length;
@@ -747,7 +951,6 @@ function updateStats() {
   document.getElementById("statFinal").textContent = analyticsData.final.length;
 }
 
-// 🔻 FUNNEL CHART — uses milestone-wise record counts
 function renderFunnel() {
   const counts = {
     otp: analyticsData.mile1.length,
@@ -774,18 +977,13 @@ function renderFunnel() {
       responsive: true,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => ctx.parsed.y + ' users'
-          }
-        }
+        tooltip: { callbacks: { label: ctx => ctx.parsed.y + ' users' } }
       },
       scales: { y: { beginAtZero: true } }
     }
   });
 }
 
-// 📈 TREND CHART — group each milestone by date
 function renderTrend() {
   const allDates = new Set();
   const grouped = { otp: {}, pan: {}, kyc: {}, personal: {}, final: {} };
@@ -806,7 +1004,6 @@ function renderTrend() {
   tally(analyticsData.final, 'final');
 
   const labels = Array.from(allDates).sort((a, b) => {
-    // Try sorting both DD/MM/YYYY and YYYY-MM-DD formats
     const parseDate = s => {
       if (s.includes('/')) {
         const [d, m, y] = s.split('/');
@@ -844,7 +1041,6 @@ function renderTrend() {
   });
 }
 
-// 📊 CONVERSION CHART — uses milestone counts
 function renderConversion() {
   const otp = analyticsData.mile1.length;
   const pan = analyticsData.mile2.length;
@@ -865,12 +1061,7 @@ function renderConversion() {
       labels: ['OTP → PAN', 'PAN → KYC', 'KYC → Personal', 'Personal → Account'],
       datasets: [{
         label: 'Conversion %',
-        data: [
-          otpToPan.toFixed(2),
-          panToKyc.toFixed(2),
-          kycToPersonal.toFixed(2),
-          personalToFinal.toFixed(2)
-        ],
+        data: [otpToPan.toFixed(2), panToKyc.toFixed(2), kycToPersonal.toFixed(2), personalToFinal.toFixed(2)],
         backgroundColor: ['#ff7a00', '#1f4e8c', '#2e7d32', '#9c27b0'],
         borderRadius: 6
       }]
@@ -879,24 +1070,15 @@ function renderConversion() {
       responsive: true,
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: ctx => ctx.parsed.y + '%'
-          }
-        }
+        tooltip: { callbacks: { label: ctx => ctx.parsed.y + '%' } }
       },
       scales: {
-        y: {
-          beginAtZero: true,
-          max: 100,
-          ticks: { callback: v => v + '%' }
-        }
+        y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } }
       }
     }
   });
 }
 
-// 📅 DAILY CHART — counts of final accounts per date
 function renderDaily() {
   const counts = {};
 
@@ -942,7 +1124,7 @@ function renderDaily() {
   });
 }
 
-// ✅ FILTERS
+// ✅ FILTERS — work with pagination
 function applyFilters() {
   const mobile = document.getElementById("mobile").value.trim().toLowerCase();
   const urn = document.getElementById("urn").value.trim().toLowerCase();
@@ -954,19 +1136,11 @@ function applyFilters() {
     formattedDate = `${d}/${m}/${y}`;
   }
 
-  let filtered = fullData.filter(item => {
-    const itemMobile = (
-      item.mobile_number ||
-      item.mobile ||
-      item.phone_number ||
-      ""
-    ).toString().trim().toLowerCase();
-
+  filteredData = fullData.filter(item => {
+    const itemMobile = (item.mobile_number || item.mobile || item.phone_number || "")
+      .toString().trim().toLowerCase();
     const itemUrn = (item.urn || "").toString().trim().toLowerCase();
-
-    const itemDate = (item.date || "")
-      .replace(/-/g, "/")
-      .trim();
+    const itemDate = (item.date || "").replace(/-/g, "/").trim();
 
     let matchMobile = !mobile || itemMobile.includes(mobile);
     let matchUrn = !urn || itemUrn.includes(urn);
@@ -975,14 +1149,11 @@ function applyFilters() {
     return matchMobile && matchUrn && matchDate;
   });
 
-  if (currentMilestone === 'mile1') renderMile1(filtered);
-  else if (currentMilestone === 'mile2') renderMile2(filtered);
-  else if (currentMilestone === 'mile3') renderMile3(filtered);
-  else if (currentMilestone === 'mile4') renderMile4(filtered);
-  else if (currentMilestone === 'final') renderFinalReport(filtered);
+  currentPage = 1;
+  renderCurrentMilestone();
 }
 
-function downloadCSV(data = fullData) {
+function downloadCSV(data = filteredData) {
   if (!data || data.length === 0) {
     alert("No data available to download");
     return;
