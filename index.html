@@ -240,7 +240,6 @@
       color: #1f4e8c;
     }
 
-    /* Spin animation for refresh icon */
     .spinning {
       animation: spin 0.8s linear infinite;
     }
@@ -248,6 +247,13 @@
     @keyframes spin {
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
+    }
+
+    .loading-overlay {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+      font-size: 13px;
     }
   </style>
 </head>
@@ -367,6 +373,15 @@ if (!localStorage.getItem("user")) {
 let fullData = [];
 let currentMilestone = 'mile1';
 
+// ✅ Holds counts from all 5 milestones
+let analyticsData = {
+  mile1: [],
+  mile2: [],
+  mile3: [],
+  mile4: [],
+  final: []
+};
+
 // ✅ Chart instances (so we can destroy & re-render on refresh)
 let funnelChartInstance = null;
 let trendChartInstance = null;
@@ -384,7 +399,6 @@ function switchMilestone(type, el) {
   document.querySelectorAll('.menu div').forEach(d => d.classList.remove('active'));
   el.classList.add('active');
 
-  // ✅ SHOW / HIDE ANALYTICS vs TABLE
   const isAnalytics = (type === 'analytics');
   document.getElementById("analyticsSection").style.display = isAnalytics ? 'block' : 'none';
   document.getElementById("reportTable").style.display = isAnalytics ? 'none' : 'table';
@@ -407,7 +421,6 @@ function refreshData() {
   else if (currentMilestone === 'analytics') loadAnalytics();
 }
 
-// ✅ Refresh just analytics with spinning icon feedback
 function refreshAnalytics() {
   const icon = document.getElementById("refreshIcon");
   icon.classList.add("spinning");
@@ -508,7 +521,6 @@ function renderMile2(data) {
   });
 }
 
-// ✅ MILESTONE 3
 function loadMile3() {
   document.getElementById("tableHead").innerHTML = `
     <tr>
@@ -571,7 +583,6 @@ function renderMile3(data) {
   });
 }
 
-// ✅ MILESTONE 4
 function loadMile4() {
   currentMilestone = 'mile4';
 
@@ -622,7 +633,6 @@ function renderMile4(data) {
   });
 }
 
-// ✅ FINAL REPORT
 function loadFinalReport() {
   document.getElementById("tableHead").innerHTML = `
     <tr>
@@ -691,89 +701,60 @@ function renderFinalReport(data) {
   });
 }
 
-// ✅ ============ ANALYTICS DASHBOARD ============
-
-// 🎯 Robust milestone-completion detectors
-function isOtpVerified(d) {
-  const val = (d.otp_status || d.otp_validation || "").toString().trim().toLowerCase();
-  return val === "otp verified" || val === "verified" || val === "true" || val === "1" || d.otp_status === true;
-}
-
-function isPanVerified(d) {
-  const val = (d.pan_status || "").toString().trim().toLowerCase();
-  return val === "verified" || val === "pan verified" || val === "true" || d.pan_status === true;
-}
-
-function isKycVerified(d) {
-  // Direct status field check
-  const statusVal = (d.kyc_status || d.status || "").toString().trim().toLowerCase();
-  const statusOk = statusVal === "verified" || statusVal === "completed" || statusVal === "kyc verified";
-
-  // Fallback: infer from KYC data presence (Aadhaar, DOB, or full address)
-  const hasKycData = !!(d.masked_aadhaar || d.aadhaar || d.dob || d.full_address);
-
-  return statusOk || hasKycData;
-}
-
-function isPersonalDone(d) {
-  const consentVal = (d.consent || "").toString().trim().toLowerCase();
-  const consentOk = consentVal === "yes" || consentVal === "true" || d.consent === true;
-
-  // Fallback: presence of personal-details fields
-  const hasPersonalData = !!(d.income && (d.occupation || d.marital_status));
-
-  return consentOk || hasPersonalData;
-}
+// ✅ ============ ANALYTICS DASHBOARD (FIXED) ============
+// 🎯 Now fetches ALL milestones in parallel and uses their actual record counts!
 
 function loadAnalytics(callback) {
-  fetch('/api/getAllData?type=final')
-    .then(res => res.json())
-    .then(result => {
-      const data = result.data || [];
-      fullData = data;
+  // Fetch all 5 endpoints in parallel
+  Promise.all([
+    fetch('/api/getAllData?type=mile1').then(r => r.json()).catch(() => ({ data: [] })),
+    fetch('/api/getAllData?type=mile2').then(r => r.json()).catch(() => ({ data: [] })),
+    fetch('/api/getAllData?type=mile3').then(r => r.json()).catch(() => ({ data: [] })),
+    fetch('/api/getAllData?type=mile4').then(r => r.json()).catch(() => ({ data: [] })),
+    fetch('/api/getAllData?type=final').then(r => r.json()).catch(() => ({ data: [] }))
+  ])
+  .then(([m1, m2, m3, m4, fin]) => {
+    analyticsData.mile1 = m1.data || [];
+    analyticsData.mile2 = m2.data || [];
+    analyticsData.mile3 = m3.data || [];
+    analyticsData.mile4 = m4.data || [];
+    analyticsData.final = fin.data || [];
 
-      updateStats(data);
-      renderFunnel(data);
-      renderTrend(data);
-      renderConversion(data);
-      renderDaily(data);
+    updateStats();
+    renderFunnel();
+    renderTrend();
+    renderConversion();
+    renderDaily();
 
-      // Update last-updated timestamp
-      const now = new Date();
-      const timeStr = now.toLocaleString();
-      document.getElementById("lastUpdated").textContent = "Last updated: " + timeStr;
+    const now = new Date();
+    document.getElementById("lastUpdated").textContent = "Last updated: " + now.toLocaleString();
 
-      if (typeof callback === "function") callback();
-    })
-    .catch(err => {
-      console.error("Analytics load error:", err);
-      alert("Failed to load analytics data");
-      if (typeof callback === "function") callback();
-    });
+    if (typeof callback === "function") callback();
+  })
+  .catch(err => {
+    console.error("Analytics load error:", err);
+    alert("Failed to load analytics data");
+    if (typeof callback === "function") callback();
+  });
 }
 
-// ✅ Quick Stats (TOP BAR)
-function updateStats(data) {
-  const otp = data.filter(isOtpVerified).length;
-  const pan = data.filter(isPanVerified).length;
-  const kyc = data.filter(isKycVerified).length;
-  const personal = data.filter(isPersonalDone).length;
-
-  document.getElementById("statOtp").textContent = otp;
-  document.getElementById("statPan").textContent = pan;
-  document.getElementById("statKyc").textContent = kyc;
-  document.getElementById("statPersonal").textContent = personal;
-  document.getElementById("statFinal").textContent = data.length;
+// ✅ Quick Stats — uses RECORD COUNT from each milestone endpoint
+function updateStats() {
+  document.getElementById("statOtp").textContent = analyticsData.mile1.length;
+  document.getElementById("statPan").textContent = analyticsData.mile2.length;
+  document.getElementById("statKyc").textContent = analyticsData.mile3.length;
+  document.getElementById("statPersonal").textContent = analyticsData.mile4.length;
+  document.getElementById("statFinal").textContent = analyticsData.final.length;
 }
 
-// 🔻 FUNNEL CHART
-function renderFunnel(data) {
+// 🔻 FUNNEL CHART — uses milestone-wise record counts
+function renderFunnel() {
   const counts = {
-    otp: data.filter(isOtpVerified).length,
-    pan: data.filter(isPanVerified).length,
-    kyc: data.filter(isKycVerified).length,
-    personal: data.filter(isPersonalDone).length,
-    final: data.length
+    otp: analyticsData.mile1.length,
+    pan: analyticsData.mile2.length,
+    kyc: analyticsData.mile3.length,
+    personal: analyticsData.mile4.length,
+    final: analyticsData.final.length
   };
 
   if (funnelChartInstance) funnelChartInstance.destroy();
@@ -793,34 +774,48 @@ function renderFunnel(data) {
       responsive: true,
       plugins: {
         legend: { display: false },
-        title: { display: false }
+        tooltip: {
+          callbacks: {
+            label: ctx => ctx.parsed.y + ' users'
+          }
+        }
       },
-      scales: {
-        y: { beginAtZero: true }
-      }
+      scales: { y: { beginAtZero: true } }
     }
   });
 }
 
-// 📈 TREND CHART
-function renderTrend(data) {
-  const grouped = {};
+// 📈 TREND CHART — group each milestone by date
+function renderTrend() {
+  const allDates = new Set();
+  const grouped = { otp: {}, pan: {}, kyc: {}, personal: {}, final: {} };
 
-  data.forEach(item => {
-    const date = item.date;
-    if (!date) return;
+  function tally(arr, key) {
+    arr.forEach(item => {
+      const date = item.date;
+      if (!date) return;
+      allDates.add(date);
+      grouped[key][date] = (grouped[key][date] || 0) + 1;
+    });
+  }
 
-    if (!grouped[date]) {
-      grouped[date] = { otp: 0, pan: 0, kyc: 0, final: 0 };
-    }
+  tally(analyticsData.mile1, 'otp');
+  tally(analyticsData.mile2, 'pan');
+  tally(analyticsData.mile3, 'kyc');
+  tally(analyticsData.mile4, 'personal');
+  tally(analyticsData.final, 'final');
 
-    if (isOtpVerified(item)) grouped[date].otp++;
-    if (isPanVerified(item)) grouped[date].pan++;
-    if (isKycVerified(item)) grouped[date].kyc++;
-    grouped[date].final++;
+  const labels = Array.from(allDates).sort((a, b) => {
+    // Try sorting both DD/MM/YYYY and YYYY-MM-DD formats
+    const parseDate = s => {
+      if (s.includes('/')) {
+        const [d, m, y] = s.split('/');
+        return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(s);
+    };
+    return parseDate(a) - parseDate(b);
   });
-
-  const labels = Object.keys(grouped).sort();
 
   if (trendChartInstance) trendChartInstance.destroy();
 
@@ -829,73 +824,54 @@ function renderTrend(data) {
     data: {
       labels,
       datasets: [
-        {
-          label: 'OTP',
-          data: labels.map(d => grouped[d].otp),
-          borderColor: '#ff7a00',
-          backgroundColor: 'rgba(255,122,0,0.1)',
-          tension: 0.3
-        },
-        {
-          label: 'PAN',
-          data: labels.map(d => grouped[d].pan),
-          borderColor: '#1f4e8c',
-          backgroundColor: 'rgba(31,78,140,0.1)',
-          tension: 0.3
-        },
-        {
-          label: 'KYC',
-          data: labels.map(d => grouped[d].kyc),
-          borderColor: '#2e7d32',
-          backgroundColor: 'rgba(46,125,50,0.1)',
-          tension: 0.3
-        },
-        {
-          label: 'Final',
-          data: labels.map(d => grouped[d].final),
-          borderColor: '#e60023',
-          backgroundColor: 'rgba(230,0,35,0.1)',
-          tension: 0.3
-        }
+        { label: 'OTP', data: labels.map(d => grouped.otp[d] || 0),
+          borderColor: '#ff7a00', backgroundColor: 'rgba(255,122,0,0.1)', tension: 0.3 },
+        { label: 'PAN', data: labels.map(d => grouped.pan[d] || 0),
+          borderColor: '#1f4e8c', backgroundColor: 'rgba(31,78,140,0.1)', tension: 0.3 },
+        { label: 'KYC', data: labels.map(d => grouped.kyc[d] || 0),
+          borderColor: '#2e7d32', backgroundColor: 'rgba(46,125,50,0.1)', tension: 0.3 },
+        { label: 'Personal', data: labels.map(d => grouped.personal[d] || 0),
+          borderColor: '#9c27b0', backgroundColor: 'rgba(156,39,176,0.1)', tension: 0.3 },
+        { label: 'Final', data: labels.map(d => grouped.final[d] || 0),
+          borderColor: '#e60023', backgroundColor: 'rgba(230,0,35,0.1)', tension: 0.3 }
       ]
     },
     options: {
       responsive: true,
-      plugins: {
-        legend: { position: 'bottom' }
-      },
-      scales: {
-        y: { beginAtZero: true }
-      }
+      plugins: { legend: { position: 'bottom' } },
+      scales: { y: { beginAtZero: true } }
     }
   });
 }
 
-// 📊 CONVERSION CHART
-function renderConversion(data) {
-  const otp = data.filter(isOtpVerified).length;
-  const pan = data.filter(isPanVerified).length;
-  const kyc = data.filter(isKycVerified).length;
-  const personal = data.filter(isPersonalDone).length;
+// 📊 CONVERSION CHART — uses milestone counts
+function renderConversion() {
+  const otp = analyticsData.mile1.length;
+  const pan = analyticsData.mile2.length;
+  const kyc = analyticsData.mile3.length;
+  const personal = analyticsData.mile4.length;
+  const final = analyticsData.final.length;
 
   const otpToPan = otp ? (pan / otp * 100) : 0;
   const panToKyc = pan ? (kyc / pan * 100) : 0;
   const kycToPersonal = kyc ? (personal / kyc * 100) : 0;
+  const personalToFinal = personal ? (final / personal * 100) : 0;
 
   if (conversionChartInstance) conversionChartInstance.destroy();
 
   conversionChartInstance = new Chart(document.getElementById('conversionChart'), {
     type: 'bar',
     data: {
-      labels: ['OTP → PAN', 'PAN → KYC', 'KYC → Personal'],
+      labels: ['OTP → PAN', 'PAN → KYC', 'KYC → Personal', 'Personal → Account'],
       datasets: [{
         label: 'Conversion %',
         data: [
           otpToPan.toFixed(2),
           panToKyc.toFixed(2),
-          kycToPersonal.toFixed(2)
+          kycToPersonal.toFixed(2),
+          personalToFinal.toFixed(2)
         ],
-        backgroundColor: ['#ff7a00', '#1f4e8c', '#2e7d32'],
+        backgroundColor: ['#ff7a00', '#1f4e8c', '#2e7d32', '#9c27b0'],
         borderRadius: 6
       }]
     },
@@ -913,26 +889,33 @@ function renderConversion(data) {
         y: {
           beginAtZero: true,
           max: 100,
-          ticks: {
-            callback: v => v + '%'
-          }
+          ticks: { callback: v => v + '%' }
         }
       }
     }
   });
 }
 
-// 📅 DAILY CHART
-function renderDaily(data) {
+// 📅 DAILY CHART — counts of final accounts per date
+function renderDaily() {
   const counts = {};
 
-  data.forEach(item => {
+  analyticsData.final.forEach(item => {
     const date = item.date;
     if (!date) return;
     counts[date] = (counts[date] || 0) + 1;
   });
 
-  const labels = Object.keys(counts).sort();
+  const labels = Object.keys(counts).sort((a, b) => {
+    const parseDate = s => {
+      if (s.includes('/')) {
+        const [d, m, y] = s.split('/');
+        return new Date(`${y}-${m}-${d}`);
+      }
+      return new Date(s);
+    };
+    return parseDate(a) - parseDate(b);
+  });
   const values = labels.map(d => counts[d]);
 
   if (dailyChartInstance) dailyChartInstance.destroy();
@@ -953,12 +936,8 @@ function renderDaily(data) {
     },
     options: {
       responsive: true,
-      plugins: {
-        legend: { position: 'bottom' }
-      },
-      scales: {
-        y: { beginAtZero: true }
-      }
+      plugins: { legend: { position: 'bottom' } },
+      scales: { y: { beginAtZero: true } }
     }
   });
 }
