@@ -5,6 +5,9 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700&display=swap" rel="stylesheet">
 
+  <!-- ✅ Chart.js CDN for Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <style>
     body {
       margin: 0;
@@ -149,6 +152,47 @@
       border-radius: 10px;
       font-size: 11px;
     }
+
+    /* ✅ Analytics Dashboard Styles */
+    .analytics-card {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .analytics-card h4 {
+      margin: 0 0 15px 0;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .stat-box {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .stat-box .label {
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 5px;
+    }
+
+    .stat-box .value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #1f4e8c;
+    }
   </style>
 </head>
 
@@ -171,6 +215,8 @@ if (!localStorage.getItem("user")) {
     <div onclick="switchMilestone('mile3', this)">Milestone 3: KYC Completed</div>
     <div onclick="switchMilestone('mile4', this)">Milestone 4: Personal Details</div>
     <div onclick="switchMilestone('final', this)">Final Account Details</div>
+    <!-- ✅ NEW Analytics Menu Item -->
+    <div onclick="switchMilestone('analytics', this)">📊 Analytics Dashboard</div>
   </div>
 </div>
 
@@ -181,7 +227,7 @@ if (!localStorage.getItem("user")) {
     <button class="logout-btn" onclick="logout()">Logout</button>
   </div>
 
-  <div class="filters">
+  <div class="filters" id="filtersSection">
     <input type="text" id="mobile" placeholder="Mobile">
     <input type="text" id="urn" placeholder="URN">
     <input type="date" id="date">
@@ -190,10 +236,63 @@ if (!localStorage.getItem("user")) {
     <button class="btn btn-download" onclick="refreshData()">Refresh</button>
   </div>
 
-  <table>
+  <table id="reportTable">
     <thead id="tableHead"></thead>
     <tbody id="tableBody"></tbody>
   </table>
+
+  <!-- ✅ ANALYTICS DASHBOARD SECTION -->
+  <div id="analyticsSection" style="display:none;">
+
+    <!-- Quick Stats Boxes -->
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="label">OTP Verified</div>
+        <div class="value" id="statOtp">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">PAN Verified</div>
+        <div class="value" id="statPan">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">KYC Completed</div>
+        <div class="value" id="statKyc">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Personal Details</div>
+        <div class="value" id="statPersonal">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="label">Total Accounts</div>
+        <div class="value" id="statFinal">0</div>
+      </div>
+    </div>
+
+    <!-- Row 1: Funnel + Trend -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+      <div class="analytics-card">
+        <h4>📊 Conversion Funnel</h4>
+        <canvas id="funnelChart"></canvas>
+      </div>
+      <div class="analytics-card">
+        <h4>📈 Milestone Trend Over Time</h4>
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Row 2: Conversion + Daily -->
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-top:20px;">
+      <div class="analytics-card">
+        <h4>🔄 Conversion Rates (%)</h4>
+        <canvas id="conversionChart"></canvas>
+      </div>
+      <div class="analytics-card">
+        <h4>📅 Daily Account Creation</h4>
+        <canvas id="dailyChart"></canvas>
+      </div>
+    </div>
+
+  </div>
 
 </div>
 
@@ -201,6 +300,12 @@ if (!localStorage.getItem("user")) {
 
 let fullData = [];
 let currentMilestone = 'mile1';
+
+// ✅ Chart instances (so we can destroy & re-render on refresh)
+let funnelChartInstance = null;
+let trendChartInstance = null;
+let conversionChartInstance = null;
+let dailyChartInstance = null;
 
 function logout() {
   localStorage.removeItem("user");
@@ -213,19 +318,27 @@ function switchMilestone(type, el) {
   document.querySelectorAll('.menu div').forEach(d => d.classList.remove('active'));
   el.classList.add('active');
 
+  // ✅ SHOW / HIDE ANALYTICS vs TABLE
+  const isAnalytics = (type === 'analytics');
+  document.getElementById("analyticsSection").style.display = isAnalytics ? 'block' : 'none';
+  document.getElementById("reportTable").style.display = isAnalytics ? 'none' : 'table';
+  document.getElementById("filtersSection").style.display = isAnalytics ? 'none' : 'flex';
+
   if (type === 'mile1') loadMile1();
-else if (type === 'mile2') loadMile2();
-else if (type === 'mile3') loadMile3();
-else if (type === 'mile4') loadMile4();
-else if (type === 'final') loadFinalReport();
+  else if (type === 'mile2') loadMile2();
+  else if (type === 'mile3') loadMile3();
+  else if (type === 'mile4') loadMile4();
+  else if (type === 'final') loadFinalReport();
+  else if (type === 'analytics') loadAnalytics();
 }
 
 function refreshData() {
   if (currentMilestone === 'mile1') loadMile1();
-else if (currentMilestone === 'mile2') loadMile2();
-else if (currentMilestone === 'mile3') loadMile3();
-else if (currentMilestone === 'mile4') loadMile4();
-else if (currentMilestone === 'final') loadFinalReport();
+  else if (currentMilestone === 'mile2') loadMile2();
+  else if (currentMilestone === 'mile3') loadMile3();
+  else if (currentMilestone === 'mile4') loadMile4();
+  else if (currentMilestone === 'final') loadFinalReport();
+  else if (currentMilestone === 'analytics') loadAnalytics();
 }
 
 function loadMile1() {
@@ -320,7 +433,7 @@ function renderMile2(data) {
   });
 }
 
-// ✅ NEW MILESTONE 3
+// ✅ MILESTONE 3
 function loadMile3() {
   document.getElementById("tableHead").innerHTML = `
     <tr>
@@ -356,26 +469,21 @@ function renderMile3(data) {
     table.innerHTML += `
       <tr>
         <td>${i+1}</td>
-        <td>${item.urn || '-'}</td> <!-- ✅ URN FIRST -->
-        <td>${item.mobile_number || '-'}</td> <!-- ✅ FIXED POSITION -->
+        <td>${item.urn || '-'}</td>
+        <td>${item.mobile_number || '-'}</td>
         <td>${item.full_name || '-'}</td>
         <td>${item.gender || '-'}</td>
         <td>${item.dob || '-'}</td>
         <td>${item.masked_aadhaar || '-'}</td>
         <td>${item.full_address || '-'}</td>
         <td>${item.zip || '-'}</td>
-
-        <!-- ✅ STATUS (NOW CORRECT) -->
         <td>
           <span class="badge-success">
             ${item.status || 'Verified'}
           </span>
         </td>
-
         <td>${item.date || '-'}</td>
         <td>${item.time || '-'}</td>
-
-        <!-- ✅ IMAGE LAST -->
         <td>
           ${
             item.profile_image
@@ -387,9 +495,9 @@ function renderMile3(data) {
     `;
   });
 }
-  // ✅ NEW MILESTONE 4
-  function loadMile4() {
 
+// ✅ MILESTONE 4
+function loadMile4() {
   currentMilestone = 'mile4';
 
   document.getElementById("tableHead").innerHTML = `
@@ -415,7 +523,8 @@ function renderMile3(data) {
       renderMile4(fullData);
     });
 }
-  function renderMile4(data) {
+
+function renderMile4(data) {
   const table = document.getElementById("tableBody");
   table.innerHTML = "";
 
@@ -437,10 +546,9 @@ function renderMile3(data) {
     `;
   });
 }
-// ✅ NEW MILESTONE 5
 
+// ✅ FINAL REPORT
 function loadFinalReport() {
-
   document.getElementById("tableHead").innerHTML = `
     <tr>
       <th>S.No</th>
@@ -474,8 +582,8 @@ function loadFinalReport() {
       renderFinalReport(fullData);
     });
 }
-  function renderFinalReport(data) {
 
+function renderFinalReport(data) {
   const table = document.getElementById("tableBody");
   table.innerHTML = "";
 
@@ -507,9 +615,244 @@ function loadFinalReport() {
     `;
   });
 }
-  
-function applyFilters() {
 
+// ✅ ============ ANALYTICS DASHBOARD ============
+function loadAnalytics() {
+  document.getElementById("tableHead").innerHTML = "";
+  document.getElementById("tableBody").innerHTML = "";
+
+  fetch('/api/getAllData?type=final')
+    .then(res => res.json())
+    .then(result => {
+      const data = result.data || [];
+      fullData = data;
+
+      updateStats(data);
+      renderFunnel(data);
+      renderTrend(data);
+      renderConversion(data);
+      renderDaily(data);
+    })
+    .catch(err => {
+      console.error("Analytics load error:", err);
+      alert("Failed to load analytics data");
+    });
+}
+
+// ✅ Quick Stats
+function updateStats(data) {
+  const otp = data.filter(d => d.otp_status === "OTP Verified").length;
+  const pan = data.filter(d => d.pan_status === "Verified").length;
+  const kyc = data.filter(d => d.status === "Verified").length;
+  const personal = data.filter(d => d.consent === true || d.consent === "Yes").length;
+
+  document.getElementById("statOtp").textContent = otp;
+  document.getElementById("statPan").textContent = pan;
+  document.getElementById("statKyc").textContent = kyc;
+  document.getElementById("statPersonal").textContent = personal;
+  document.getElementById("statFinal").textContent = data.length;
+}
+
+// 🔻 FUNNEL CHART
+function renderFunnel(data) {
+  const counts = {
+    otp: data.filter(d => d.otp_status === "OTP Verified").length,
+    pan: data.filter(d => d.pan_status === "Verified").length,
+    kyc: data.filter(d => d.status === "Verified").length,
+    personal: data.filter(d => d.consent === true || d.consent === "Yes").length,
+    final: data.length
+  };
+
+  if (funnelChartInstance) funnelChartInstance.destroy();
+
+  funnelChartInstance = new Chart(document.getElementById('funnelChart'), {
+    type: 'bar',
+    data: {
+      labels: ['OTP', 'PAN', 'KYC', 'Personal', 'Account'],
+      datasets: [{
+        label: 'Users',
+        data: [counts.otp, counts.pan, counts.kyc, counts.personal, counts.final],
+        backgroundColor: [
+          '#ff7a00',
+          '#1f4e8c',
+          '#2e7d32',
+          '#9c27b0',
+          '#e60023'
+        ],
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        title: { display: false }
+      },
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+}
+
+// 📈 TREND CHART
+function renderTrend(data) {
+  const grouped = {};
+
+  data.forEach(item => {
+    const date = item.date;
+    if (!date) return;
+
+    if (!grouped[date]) {
+      grouped[date] = { otp: 0, pan: 0, kyc: 0, final: 0 };
+    }
+
+    if (item.otp_status === "OTP Verified") grouped[date].otp++;
+    if (item.pan_status === "Verified") grouped[date].pan++;
+    if (item.status === "Verified") grouped[date].kyc++;
+    grouped[date].final++;
+  });
+
+  const labels = Object.keys(grouped).sort();
+
+  if (trendChartInstance) trendChartInstance.destroy();
+
+  trendChartInstance = new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'OTP',
+          data: labels.map(d => grouped[d].otp),
+          borderColor: '#ff7a00',
+          backgroundColor: 'rgba(255,122,0,0.1)',
+          tension: 0.3
+        },
+        {
+          label: 'PAN',
+          data: labels.map(d => grouped[d].pan),
+          borderColor: '#1f4e8c',
+          backgroundColor: 'rgba(31,78,140,0.1)',
+          tension: 0.3
+        },
+        {
+          label: 'KYC',
+          data: labels.map(d => grouped[d].kyc),
+          borderColor: '#2e7d32',
+          backgroundColor: 'rgba(46,125,50,0.1)',
+          tension: 0.3
+        },
+        {
+          label: 'Final',
+          data: labels.map(d => grouped[d].final),
+          borderColor: '#e60023',
+          backgroundColor: 'rgba(230,0,35,0.1)',
+          tension: 0.3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom' }
+      },
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+}
+
+// 📊 CONVERSION CHART
+function renderConversion(data) {
+  const otp = data.filter(d => d.otp_status === "OTP Verified").length;
+  const pan = data.filter(d => d.pan_status === "Verified").length;
+  const kyc = data.filter(d => d.status === "Verified").length;
+  const personal = data.filter(d => d.consent === true || d.consent === "Yes").length;
+
+  const otpToPan = otp ? (pan / otp * 100) : 0;
+  const panToKyc = pan ? (kyc / pan * 100) : 0;
+  const kycToPersonal = kyc ? (personal / kyc * 100) : 0;
+
+  if (conversionChartInstance) conversionChartInstance.destroy();
+
+  conversionChartInstance = new Chart(document.getElementById('conversionChart'), {
+    type: 'bar',
+    data: {
+      labels: ['OTP → PAN', 'PAN → KYC', 'KYC → Personal'],
+      datasets: [{
+        label: 'Conversion %',
+        data: [
+          otpToPan.toFixed(2),
+          panToKyc.toFixed(2),
+          kycToPersonal.toFixed(2)
+        ],
+        backgroundColor: ['#ff7a00', '#1f4e8c', '#2e7d32'],
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 100,
+          ticks: {
+            callback: v => v + '%'
+          }
+        }
+      }
+    }
+  });
+}
+
+// 📅 DAILY CHART
+function renderDaily(data) {
+  const counts = {};
+
+  data.forEach(item => {
+    const date = item.date;
+    if (!date) return;
+    counts[date] = (counts[date] || 0) + 1;
+  });
+
+  const labels = Object.keys(counts).sort();
+  const values = labels.map(d => counts[d]);
+
+  if (dailyChartInstance) dailyChartInstance.destroy();
+
+  dailyChartInstance = new Chart(document.getElementById('dailyChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Accounts Created',
+        data: values,
+        borderColor: '#e60023',
+        backgroundColor: 'rgba(230,0,35,0.15)',
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: '#e60023'
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'bottom' }
+      },
+      scales: {
+        y: { beginAtZero: true }
+      }
+    }
+  });
+}
+
+// ✅ FILTERS
+function applyFilters() {
   const mobile = document.getElementById("mobile").value.trim().toLowerCase();
   const urn = document.getElementById("urn").value.trim().toLowerCase();
   const dateInput = document.getElementById("date").value;
@@ -521,7 +864,6 @@ function applyFilters() {
   }
 
   let filtered = fullData.filter(item => {
-
     const itemMobile = (
       item.mobile_number ||
       item.mobile ||
@@ -548,39 +890,27 @@ function applyFilters() {
   else if (currentMilestone === 'mile4') renderMile4(filtered);
   else if (currentMilestone === 'final') renderFinalReport(filtered);
 }
-  function downloadCSV(data = fullData) {
 
+function downloadCSV(data = fullData) {
   if (!data || data.length === 0) {
     alert("No data available to download");
     return;
   }
 
-  // 🔥 Get headers dynamically
   const headers = Object.keys(data[0]);
-
-  // 🔥 Convert JSON → CSV
   const csvRows = [];
-
-  // Header row
   csvRows.push(headers.join(","));
 
-  // Data rows
   data.forEach(row => {
     const values = headers.map(header => {
       let val = row[header] ?? "";
-
-      // Escape commas & quotes
       val = val.toString().replace(/"/g, '""');
-
       return `"${val}"`;
     });
-
     csvRows.push(values.join(","));
   });
 
   const csvString = csvRows.join("\n");
-
-  // 🔥 Download file
   const blob = new Blob([csvString], { type: "text/csv" });
   const url = window.URL.createObjectURL(blob);
 
